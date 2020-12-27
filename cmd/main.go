@@ -7,14 +7,17 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"pulley.com/shakesearch/pkg/shakesearch"
+	searcherPkg "pulley.com/shakesearch/pkg/searcher"
+	shakesearchPkg "pulley.com/shakesearch/pkg/searcher/shakesearch"
+	filestorePkg "pulley.com/shakesearch/pkg/datastore/filestore"
+	datastorerPkg "pulley.com/shakesearch/pkg/datastore"
 	// searcherIntr "pulley.com/shakesearch/pkg/searcher"
 )
 
 func main() {
-	searcher := shakesearch.Searcher{}
-	err := searcher.Load("completeworks.txt")
+	searcher := shakesearchPkg.Searcher{}
+	// err := searcher.Load("completeworks.txt")
+	fileStore, err := filestorePkg.NewFileStore("completeworks.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -22,7 +25,9 @@ func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
-	http.HandleFunc("/search", handleSearch(searcher))
+	// this is where we are currently planning to pass search algo and storage
+	// we can swap the search algo and storage as required later.
+	http.HandleFunc("/search", handleSearch(searcher, fileStore))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -36,7 +41,7 @@ func main() {
 	}
 }
 
-func handleSearch(searcher shakesearch.Searcher) func(w http.ResponseWriter, r *http.Request) {
+func handleSearch(searcher searcherPkg.Searcher, store datastorerPkg.Storer) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query, ok := r.URL.Query()["q"]
 		if !ok || len(query[0]) < 1 {
@@ -44,7 +49,7 @@ func handleSearch(searcher shakesearch.Searcher) func(w http.ResponseWriter, r *
 			w.Write([]byte("missing search query in URL params"))
 			return
 		}
-		results := searcher.Search(query[0])
+		results := searcher.Search(query[0], store)
 		buf := &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
 		err := enc.Encode(results)
